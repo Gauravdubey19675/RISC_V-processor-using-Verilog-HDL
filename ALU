@@ -1,0 +1,135 @@
+module ALU ( result,ALU_control,inp_A ,inp_B , neg_B);
+input [31:0]inp_A;
+input [31:0]inp_B;
+input neg_B;
+input[5:0]ALU_control;
+
+output reg [31:0]result;
+
+always@(*)
+begin //1
+result = 32'b0;
+if(ALU_control == 6'b0)
+begin
+result = 32'b0;
+end  
+else if (ALU_control == 6'b000001)
+begin    //2
+if(!neg_B)
+begin    //3
+result = inp_A + inp_B;
+end      //3
+else if(neg_B)
+begin   //4
+result = inp_A + $signed(inp_B);
+end     //4
+end     //3
+
+else if(ALU_control == 6'b000010)
+begin   //5
+result = inp_A - inp_B;
+end     //5
+
+else if (ALU_control == 6'b000011)
+begin   //6
+result = inp_A & inp_B ;
+end    //6
+
+else if (ALU_control == 6'b000100)
+begin   //7
+result =inp_A | inp_B;
+end     //7
+
+else if(ALU_control == 6'b000101)
+begin   //8
+result = inp_A ^ inp_B;
+end    //8
+
+else if (ALU_control == 6'b000110)
+begin   //9
+result = inp_A << inp_B;
+end     //9
+
+else if(ALU_control == 6'b000111)
+begin   //10
+result = inp_A >> inp_B;
+end    //10
+
+else if (ALU_control == 6'b001000)
+begin   //11
+result = inp_A >>> inp_B;
+end     //11
+
+else if (ALU_control == 6'b001010)
+begin   //12
+if ($signed(inp_A) > $signed(inp_B))
+begin   //13
+result = 32'b1;
+end     //13
+else 
+result = 32'b0;
+end     //12
+
+
+else if (ALU_control == 6'b001001)
+begin    //14
+if (inp_A > inp_B)
+begin    //15
+result = 32'b1;
+end     //15
+else 
+result = 32'b0;
+end      //14
+
+else if (ALU_control == 6'b001011)
+begin   //16
+result = inp_A + $signed(inp_B);
+end    //16
+
+else if (ALU_control == 6'b001100)
+begin     //17
+if ($signed(inp_A) < $signed(inp_B))
+begin     //18
+result = 32'b1;
+end       //18
+else
+result = 32'b0;
+end      //17
+
+else if(ALU_control == 6'b001101)
+begin    //19
+if (inp_A  < inp_B)
+begin    //20
+result = 32'b1;
+end      //20
+else
+result = 32'b0;
+end      //19
+
+else if (ALU_control == 6'b001110)
+begin    //21
+result = inp_A & inp_B;
+end      //21
+
+else if (ALU_control == 6'b001111)
+begin     //22
+result = inp_A | inp_B;
+end      //22
+
+else if (ALU_control == 6'b010000 )
+begin     //23
+result = inp_A << inp_B;
+end      //23
+
+else if (ALU_control == 6'b010001 )
+begin     //24
+result = inp_A >> inp_B;
+end       //24
+
+else if (ALU_control == 6'b010010)
+begin    //25
+result = inp_A >>> inp_B;
+end      //25
+end   //2
+
+endmodule
