@@ -1,0 +1,1067 @@
+module PC(PC_current , clk , reset ,PC_final);
+input clk;
+input reset;
+input [31:0]PC_final;
+output reg [31:0]PC_current;
+
+
+always@(negedge clk or posedge reset)
+begin
+if (reset)
+begin
+PC_current <= 32'b0;
+end
+else if(!reset)
+begin
+PC_current<=PC_final;
+end
+end
+
+endmodule
+
+module Instruction_memory(instruction_out , PC_curr);
+input [31:0]PC_curr;
+output [31:0]instruction_out;
+
+reg [7:0]inst_mem[0:1023];
+
+initial 
+begin
+// Initialize instruction memory
+{inst_mem[3],   inst_mem[2],   inst_mem[1],   inst_mem[0]}    = 32'h00100093;  // addi x1, x0, 1   (x1 = 1)
+{inst_mem[7],   inst_mem[6],   inst_mem[5],   inst_mem[4]}    = 32'h00208113;  // addi x2, x1, 2   (x2 = 1+2=3)
+{inst_mem[11],  inst_mem[10],  inst_mem[9],   inst_mem[8]}    = 32'h00208233;  // add  x4, x1, x2  (x4 = 1+3=4)
+{inst_mem[15],  inst_mem[14],  inst_mem[13],  inst_mem[12]}   = 32'h00402223;  // sw   x4, 4(x0)   (Mem[4] = 4)
+
+// Load from address 4 into x5
+{inst_mem[19],  inst_mem[18],  inst_mem[17],  inst_mem[16]}   = 32'h00402283;  // lw   x5, 4(x0)   (x5 = Mem[4] = 4)
+{inst_mem[23],  inst_mem[22],  inst_mem[21],  inst_mem[20]}   = 32'h00528463;  // beq  x5, x5, 8   (PC += 8, always taken)
+{inst_mem[27],  inst_mem[26],  inst_mem[25],  inst_mem[24]}   = 32'h00000013;  // nop (addi x0, x0, 0) - Skipped
+{inst_mem[31],  inst_mem[30],  inst_mem[29],  inst_mem[28]}   = 32'h00600313;  // addi x6, x0, 6   (x6 = 6)
+{inst_mem[35],  inst_mem[34],  inst_mem[33],  inst_mem[32]}   = 32'h406303b3;  // sub  x7, x6, x6  (x7 = 6-6 = 0)
+{inst_mem[39],  inst_mem[38],  inst_mem[37],  inst_mem[36]}   = 32'h0073a023;  // sw   x7, 0(x7)   (Mem[0] = 0)
+{inst_mem[43],  inst_mem[42],  inst_mem[41],  inst_mem[40]}   = 32'h00002403;  // lw   x8, 0(x0)   (x8 = Mem[0] = 0)
+
+{inst_mem[47],  inst_mem[46],  inst_mem[45],  inst_mem[44]}   = 32'h00800463;  // beq  x0, x8, 8   (Branch if 0==0, taken)
+{inst_mem[51],  inst_mem[50],  inst_mem[49],  inst_mem[48]}   = 32'h00100093;  // addi x1, x0, 1   (x1 = 1) - Skipped
+{inst_mem[55],  inst_mem[54],  inst_mem[53],  inst_mem[52]}   = 32'h00200113;  // addi x2, x0, 2   (x2 = 2) - Executed
+
+// FUNCTION CALL (JAL)
+// Call function at address 0x50 (80 bytes from start, 20 instructions)
+{inst_mem[59],  inst_mem[58],  inst_mem[57],  inst_mem[56]}   = 32'h014000EF;  // jal  x1, 0x50    (ra = PC+4 = 0x3C+4 = 0x40)
+
+// INSTRUCTIONS AFTER JAL (Return Address)
+{inst_mem[63],  inst_mem[62],  inst_mem[61],  inst_mem[60]}   = 32'h00300193;  // addi x3, x0, 3   (x3 = 3) - Executed after return
+{inst_mem[67],  inst_mem[66],  inst_mem[65],  inst_mem[64]}   = 32'h00400213;  // addi x4, x0, 4   (x4 = 4)
+{inst_mem[71],  inst_mem[70],  inst_mem[69],  inst_mem[68]}   = 32'h00500293;  // addi x5, x0, 5   (x5 = 5)
+{inst_mem[75],  inst_mem[74],  inst_mem[73],  inst_mem[72]}   = 32'h00600313;  // addi x6, x0, 6   (x6 = 6)
+
+// FUNCTION CODE (Jump Target) 
+// Address 0x50 (80): Function starts here
+{inst_mem[79],  inst_mem[78],  inst_mem[77],  inst_mem[76]}   = 32'h00120213;  // addi x4, x4, 1   (x4 = x4 + 1) - Function body
+{inst_mem[83],  inst_mem[82],  inst_mem[81],  inst_mem[80]}   = 32'h00220333;  // add  x6, x4, x2  (x6 = x4 + x2)
+{inst_mem[87],  inst_mem[86],  inst_mem[85],  inst_mem[84]}   = 32'h00602023;  // sw   x6, 0(x0)   (Mem[0] = x6)
+
+//  FUNCTION RETURN (JALR)
+// Return to caller using the address saved in ra (x1)
+{inst_mem[91],  inst_mem[90],  inst_mem[89],  inst_mem[88]}   = 32'h00008067;  // jalr x0, 0(x1)   (PC = ra + 0 = 0x40)
+
+// CONTINUATION AFTER RETURN 
+// Address 0x40 (64): Execution continues here after return
+{inst_mem[95],  inst_mem[94],  inst_mem[93],  inst_mem[92]}   = 32'h00700413;  // addi x8, x0, 7   (x8 = 7)
+{inst_mem[99],  inst_mem[98],  inst_mem[97],  inst_mem[96]}   = 32'h00802423;  // sw   x8, 8(x0)   (Mem[8] = 7)
+{inst_mem[103], inst_mem[102], inst_mem[101], inst_mem[100]}  = 32'h00000013;  // nop
+{inst_mem[107], inst_mem[106], inst_mem[105], inst_mem[104]}  = 32'h00000013;  // nop
+
+end
+
+assign instruction_out = {inst_mem[PC_curr + 3] , inst_mem[PC_curr +  2] , inst_mem[PC_curr + 1] , inst_mem[PC_curr]};
+
+
+endmodule
+
+
+module memory_management_unit(valid_access , physical_address , data_address , is_sw , is_sh , is_sb , is_lbu , is_lb , is_lh , is_lhu , is_lw);
+input is_sw;
+input is_sh;
+input is_sb;
+input is_lbu;
+input is_lb;
+input is_lhu;
+input is_lh;
+input is_lw;
+input [31:0]data_address;
+output [9:0]physical_address;
+output valid_access;
+
+
+assign physical_address = data_address[9:0];
+
+assign valid_access = (physical_address<1021 && is_sw) || (physical_address<1023 && is_sh) || (physical_address < 1023 && is_sb) || (physical_address < 1021 && (is_lb || is_lbu || is_lh || is_lhu || is_lw));
+
+endmodule
+
+
+
+
+module data_memory(data_out  , physical_address , clk , reset ,  wr_en_data , data_in , valid_access);
+
+input wr_en_data ;
+input [31:0]data_in;
+input clk;
+input reset;
+input [9:0]physical_address;
+input valid_access;
+output[31:0]data_out;
+
+reg [7:0]memo[0:1023];
+
+reg [10:0]i;
+
+
+always @(negedge clk or posedge reset)
+begin
+if(reset)
+begin
+for(i=0 ; i<1024 ; i=i+1)
+memo[i]<=8'b0;
+end
+else
+begin
+if (wr_en_data)
+begin
+if(valid_access)
+begin
+memo[physical_address]<= data_in[7:0];
+memo[physical_address+1]<=data_in[15:8];
+memo[physical_address+2]<=data_in[23:16];
+memo[physical_address+3]<=data_in[31:24];
+end
+end
+end
+end
+
+assign data_out = valid_access ?{memo[physical_address + 3] , memo[physical_address+ 2] , memo[physical_address + 1] , memo[physical_address]}:32'b0;
+
+endmodule
+
+
+
+
+module register_set(rd_out_1 , rd_out_2 , clk , rst , register_1 , register_2 , destination_register ,incoming_data, wr_en_register);
+input[4:0]destination_register;
+input [4:0]register_1;
+input [4:0]register_2;
+input clk;
+input rst;
+output [31:0]rd_out_1;
+output [31:0]rd_out_2;
+input [31:0]incoming_data;
+input wr_en_register;
+
+
+reg [31:0]memory[31:0];
+
+
+reg [5:0]i;
+
+always@(negedge clk or posedge rst)
+begin
+if(rst)
+begin
+for(i=0 ; i<32 ; i=i+1)
+begin
+memory[i]<=32'b0;
+end
+end
+else if(!rst)
+begin
+if(wr_en_register && destination_register != 5'b0)
+begin
+memory[destination_register]<=incoming_data;
+end
+end
+end
+
+assign rd_out_1 = memory[register_1];
+assign rd_out_2 = memory[register_2];
+
+endmodule
+
+module control_unit(is_add, is_sub, is_and, is_or, is_xor, is_sll, is_slt, is_sltu, is_srl, is_sra,
+is_addi, is_andi, is_ori, is_xori, is_slli, is_srli, is_srai, is_slti, is_sltiu,
+is_lb, is_lh, is_lw, is_lbu, is_lhu,
+is_sb, is_sh, is_sw,
+is_beq, is_bne, is_blt, is_bge, is_bltu, is_bgeu, is_jal, is_jalr ,is_lui , is_auipc,reset,instruction);
+input [31:0]instruction;
+input reset;
+output is_add;
+output is_sub;
+output is_and;
+output is_or;
+output is_xor;
+output is_sll;
+output is_slt;
+output is_sltu;
+output is_srl;
+output is_sra;
+
+output is_addi;
+output is_andi;
+output is_ori;
+output is_xori;
+output is_slli;
+output is_srli;
+output is_srai;
+output is_slti;
+output is_sltiu;
+
+output is_lb;
+output is_lh;
+output is_lw;
+output is_lbu;
+output is_lhu;
+
+output is_sb;
+output is_sh;
+output is_sw;
+
+output is_beq;
+output is_bne;
+output is_blt;
+output is_bge;
+output is_bltu;
+output is_bgeu;
+
+
+output is_jal;
+output is_jalr;
+  
+output is_lui;
+output is_auipc;
+
+  
+ 
+//register_type
+assign is_add  = ~reset && (instruction[6:0] == 7'b0110011) && (instruction[14:12] == 3'b000) && (instruction[31:25] == 7'b0000000);
+assign is_sub  = ~reset && (instruction[6:0]   == 7'b0110011 ) && (instruction[14:12] == 3'b000) && (instruction[31:25] == 7'b0100000);
+assign is_and  = ~reset && (instruction[6:0]  == 7'b0110011) && (instruction[14:12] == 3'b111) && (instruction[31:25] == 7'b0000000);
+assign is_or = ~reset && (instruction[6:0]   == 7'b0110011) && (instruction[14:12] == 3'b110) && (instruction[31:25] == 7'b0000000);
+assign is_xor  =  ~reset && (instruction[6:0]   == 7'b0110011) && (instruction[14:12] == 3'b100) && (instruction[31:25] == 7'b0000000);
+assign is_sll = ~reset && (instruction[6:0]   == 7'b0110011) && (instruction[14:12] == 3'b001) && (instruction[31:25] == 7'b0000000);
+assign is_slt  = ~reset && (instruction[6:0]      == 7'b0110011) && (instruction[14:12] == 3'b010) && (instruction[31:25] == 7'b0000000);
+assign is_sltu = ~reset && (instruction[6:0]   == 7'b0110011) && (instruction[14:12] == 3'b011) && (instruction[31:25] == 7'b0000000);
+assign is_srl  = ~reset && (instruction[6:0]   == 7'b0110011) && (instruction[14:12] == 3'b101) &&   (instruction[31:25] == 7'b0000000);
+assign is_sra  = ~reset && (instruction[6:0]   == 7'b0110011)    &&     (instruction[14:12] == 3'b101) && (instruction[31:25] == 7'b0100000);
+
+
+//immediate register_type
+assign is_addi  = ~reset &&  (instruction[6:0] == 7'b0010011) && (instruction[14:12] == 3'b000); 
+assign is_slti  = ~reset &&(instruction[6:0] == 7'b0010011) &&  (instruction[14:12] == 3'b010); 
+assign is_sltiu = ~reset &&(instruction[6:0] == 7'b0010011) &&(instruction[14:12] ==  3'b011); 
+assign is_xori  =~reset &&(instruction[6:0] == 7'b0010011)&& (instruction[14:12] == 3'b100); 
+assign is_ori   = ~reset&& (instruction[6:0] == 7'b0010011) &&(instruction[14:12] == 3'b110); 
+assign is_andi  = ~reset && (instruction[6:0] == 7'b0010011) &&(instruction[14:12] == 3'b111); 
+assign is_slli  = ~reset &&(instruction[6:0] == 7'b0010011)&& (instruction[14:12] == 3'b001) &&(instruction[31:25] == 7'b0000000);
+assign is_srli  = ~reset && (instruction[6:0] == 7'b0010011) &&(instruction[14:12] == 3'b101)&& (instruction[31:25] == 7'b0000000);
+assign is_srai  = ~reset && (instruction[6:0] == 7'b0010011) &&(instruction[14:12] == 3'b101)&& (instruction[31:25] == 7'b0100000);
+
+
+//load_type
+assign is_lb  = ~reset &&(instruction[6:0] == 7'b0000011) && (instruction[14:12] == 3'b000);
+assign is_lh  = ~reset && (instruction[6:0]  == 7'b0000011) && (instruction[14:12] ==  3'b001);
+assign is_lw  = ~reset &&(instruction[6:0]   == 7'b0000011) &&(instruction[14:12] == 3'b010);
+assign is_lbu = ~reset &&(instruction[6:0]   == 7'b0000011)&& (instruction[14:12] == 3'b100);
+assign is_lhu = ~reset&&(instruction[6:0] == 7'b0000011)&&(instruction[14:12] == 3'b101);
+
+
+//jump_type
+assign is_jal  = ~reset &&(instruction[6:0]==7'b1101111);                            
+assign is_jalr = ~reset &&(instruction[6:0]== 7'b1100111) &&(instruction[14:12] ==3'b000);
+
+
+//store_type
+assign is_sb = ~reset&& (instruction[6:0]== 7'b0100011) &&(instruction[14:12] ==3'b000); 
+assign is_sh = ~reset && (instruction[6:0]  == 7'b0100011) &&(instruction[14:12] == 3'b001); 
+assign is_sw = ~reset && (instruction[6:0]== 7'b0100011) &&  (instruction[14:12] == 3'b010); 
+
+
+//conditional branches type
+assign is_beq  = ~reset &&(instruction[6:0]== 7'b1100011) &&(instruction[14:12]==3'b000); 
+assign is_bne  = ~reset && (instruction[6:0] ==7'b1100011)&&(instruction[14:12]== 3'b001); 
+assign is_blt  = ~reset &&(instruction[6:0] == 7'b1100011) &&(instruction[14:12] ==3'b100); 
+assign is_bge  = ~reset && (instruction[6:0] == 7'b1100011)&& (instruction[14:12] == 3'b101); 
+assign is_bltu = ~reset &&(instruction[6:0]== 7'b1100011)&&(instruction[14:12] == 3'b110); 
+assign is_bgeu = ~reset && (instruction[6:0]== 7'b1100011)&& (instruction[14:12] ==3'b111); 
+
+
+assign is_lui   = ~reset&&(instruction[6:0]== 7'b0110111);  
+assign is_auipc = ~reset && (instruction[6:0]== 7'b0010111); 
+endmodule
+
+
+
+
+  
+module ALU ( result,ALU_control,inp_A ,inp_B , neg_B);
+input [31:0]inp_A;
+input [31:0]inp_B;
+input neg_B;
+input[5:0]ALU_control;
+
+output reg [31:0]result;
+
+always@(*)
+begin //1
+result = 32'b0;
+if(ALU_control == 6'b0)
+begin
+result = 32'b0;
+end  
+else if (ALU_control == 6'b000001)
+begin    //2
+if(!neg_B)
+begin    //3
+result = inp_A + inp_B;
+end      //3
+else if(neg_B)
+begin   //4
+result = inp_A + $signed(inp_B);
+end     //4
+end     //3
+
+else if(ALU_control == 6'b000010)
+begin   //5
+result = inp_A - inp_B;
+end     //5
+
+else if (ALU_control == 6'b000011)
+begin   //6
+result = inp_A & inp_B ;
+end    //6
+
+else if (ALU_control == 6'b000100)
+begin   //7
+result =inp_A | inp_B;
+end     //7
+
+else if(ALU_control == 6'b000101)
+begin   //8
+result = inp_A ^ inp_B;
+end    //8
+
+else if (ALU_control == 6'b000110)
+begin   //9
+result = inp_A << inp_B;
+end     //9
+
+else if(ALU_control == 6'b000111)
+begin   //10
+result = inp_A >> inp_B;
+end    //10
+
+else if (ALU_control == 6'b001000)
+begin   //11
+result = inp_A >>> inp_B;
+end     //11
+
+else if (ALU_control == 6'b001010)
+begin   //12
+if ($signed(inp_A) > $signed(inp_B))
+begin   //13
+result = 32'b1;
+end     //13
+else 
+result = 32'b0;
+end     //12
+
+
+else if (ALU_control == 6'b001001)
+begin    //14
+if (inp_A > inp_B)
+begin    //15
+result = 32'b1;
+end     //15
+else 
+result = 32'b0;
+end      //14
+
+else if (ALU_control == 6'b001011)
+begin   //16
+result = inp_A + $signed(inp_B);
+end    //16
+
+else if (ALU_control == 6'b001100)
+begin     //17
+if ($signed(inp_A) < $signed(inp_B))
+begin     //18
+result = 32'b1;
+end       //18
+else
+result = 32'b0;
+end      //17
+
+else if(ALU_control == 6'b001101)
+begin    //19
+if (inp_A  < inp_B)
+begin    //20
+result = 32'b1;
+end      //20
+else
+result = 32'b0;
+end      //19
+
+else if (ALU_control == 6'b001110)
+begin    //21
+result = inp_A & inp_B;
+end      //21
+
+else if (ALU_control == 6'b001111)
+begin     //22
+result = inp_A | inp_B;
+end      //22
+
+else if (ALU_control == 6'b010000 )
+begin     //23
+result = inp_A << inp_B;
+end      //23
+
+else if (ALU_control == 6'b010001 )
+begin     //24
+result = inp_A >> inp_B;
+end       //24
+
+else if (ALU_control == 6'b010010)
+begin    //25
+result = inp_A >>> inp_B;
+end      //25
+end   //2
+
+endmodule
+
+module main_control(neg_B , temp_0 ,temp_2 ,processed_data , PC_done  ,overall_address ,wr_enable_data , wr_enable_register ,misalligned_access ,ALU_control , register_1 , register_2 , destination_register ,is_add, is_sub, is_and, is_or, is_xor, is_sll, is_slt, is_sltu, is_srl, is_sra,
+is_addi, is_andi, is_ori, is_xori, is_slli, is_srli, is_srai, is_slti, is_sltiu,
+is_lb , is_lh , is_lw , is_lbu , is_lhu ,
+is_sb , is_sh , is_sw ,
+is_beq , is_bne , is_blt , is_bge , is_bltu , is_bgeu , is_jal , is_jalr , is_lui , is_auipc , instruction, PC_curr , result ,rd_out_2 , rd_out_1 ,data_out  );
+input is_add ;
+input is_sub ; 
+input is_and ;
+input  is_or;
+input  is_xor;
+input  is_sll ;
+input  is_slt ;
+input  is_sltu ;
+input is_srl ;
+input  is_sra;
+input is_addi ;
+input is_andi ;
+input  is_ori ;
+input is_xori ;
+input is_slli ;
+input is_srli ;
+input  is_srai ;
+input is_slti ;
+input is_sltiu ;
+input is_lb ;
+input is_lh ;
+input is_lw ;
+input is_lbu ;
+input is_lhu ;
+input is_sb ;
+input is_sh ;
+input is_sw ;
+input is_beq ;
+input is_bne ;
+input is_blt ;
+input is_bge ;
+input is_bltu ;
+input is_bgeu ;
+input is_jal ;
+input is_jalr ;
+input is_lui;
+input is_auipc;
+input [31:0]instruction ;
+input [31:0]PC_curr ;
+input [31:0]rd_out_1;
+input [31:0]rd_out_2;
+input[31:0]result;
+input [31:0]data_out;
+output neg_B;
+output [31:0]processed_data;
+output [31:0]PC_done;
+output [31:0]overall_address;
+output misalligned_access;
+output wr_enable_register;
+output wr_enable_data;
+output reg [4:0]register_1;
+output reg [4:0]register_2;
+output reg [4:0]destination_register;
+output reg [5:0]ALU_control;
+
+
+reg[11:0]immediate;
+reg [31:0]complete_address;
+reg [19:0]immediate_jump;
+reg [11:0]raw_immediate;
+reg [19:0]raw_immediate_load_upper;
+reg [11:0]offset_immediate;
+reg [7:0]byte_0;
+reg [7:0]byte_1;
+reg [7:0]byte_2;
+reg [7:0]byte_3;
+reg[31:0]PC_final;
+reg [31:0]temp_1 ; 
+output reg [31:0]temp_2;  
+output reg [31:0]temp_0;
+
+always@(*)
+begin
+PC_final = PC_curr + 4;
+complete_address = 32'b0;
+temp_1 = 32'b0;
+temp_2 = 32'b0;
+temp_0 = 32'b0;
+ALU_control = 6'b0;
+immediate = instruction[31:20];
+offset_immediate = {instruction[31:25] , instruction[11:7]};
+immediate_jump = {instruction[31] , instruction[19:12] , instruction[20] , instruction[30:21]};
+raw_immediate = {instruction[31] , instruction[7] , instruction[30:25] , instruction[11:8]};
+raw_immediate_load_upper = instruction[31:12];
+register_1 = instruction[19:15];
+register_2 = instruction [24:20];
+destination_register = instruction[11:7];
+byte_0 = data_out[7:0];
+byte_1 = data_out[15:8];
+byte_2 = data_out[23:16];
+byte_3 = data_out[31:24];
+
+if (is_add)
+begin
+ALU_control = 6'b000001;
+temp_0 = rd_out_1;
+temp_2 = rd_out_2;
+temp_1 = result;
+end
+
+else if(is_sub)
+begin
+ALU_control = 6'b000010;
+temp_2 = rd_out_2;
+temp_0 = rd_out_1;
+temp_1 = result;
+end
+
+else if(is_and)
+begin
+ALU_control = 6'b000011;
+temp_2 = rd_out_2;
+temp_0 = rd_out_1;
+temp_1 = result;
+end
+
+else if(is_or)
+begin
+ALU_control = 6'b000100;
+temp_2 = rd_out_2;
+temp_0 = rd_out_1;
+temp_1 = result;
+end
+
+else if(is_xor)
+begin
+ALU_control = 6'b000101;
+temp_2 = rd_out_2;
+temp_0 = rd_out_1;
+temp_1 = result;
+end
+
+else if(is_sll)
+begin
+ALU_control = 6'b000110;
+temp_2={{27'b0} , rd_out_2[4:0]};
+temp_0 = rd_out_1;
+temp_1 = result;
+end
+
+else if(is_srl)
+begin
+ALU_control = 6'b000111;
+temp_2 = {{27'b0} , rd_out_2[4:0]};
+temp_0 = rd_out_1;
+temp_1= result;
+end
+
+else if (is_sra)
+begin
+ALU_control = 6'b001000;
+temp_2 = {{27'b0} , rd_out_2[4:0]};
+temp_0 = rd_out_1;
+temp_1 = result;
+end
+
+
+else if (is_sltu)
+begin
+ALU_control = 6'b001001;
+temp_2 = rd_out_2;
+temp_0 = rd_out_1;
+temp_1 = result;
+end
+
+else if (is_slt)
+begin
+ALU_control = 6'b001010;
+temp_2 = rd_out_2;
+temp_0 = rd_out_1;
+temp_1 = result;
+end
+
+if (is_addi)
+begin
+ALU_control = 6'b001011;
+temp_0 = rd_out_1;
+temp_2 = {{20{immediate[11]}}, immediate} ;  /// imm to add is stored in temp_2;
+temp_1 = result;
+end
+
+
+else if (is_slti)
+begin
+ALU_control = 6'b001100;
+temp_0 = rd_out_1;
+temp_2 = {{20{immediate[11]}} , immediate};
+temp_1 = result;
+end
+
+
+
+else if (is_sltiu)   // wr_enable 1 krna hai
+begin
+ALU_control = 6'b001101;
+temp_0 = rd_out_1;
+temp_2 = {{20{immediate[11]}} , immediate};
+temp_1 = result;
+end
+
+
+else if(is_andi)
+begin
+ALU_control = 6'b001110;
+temp_0 = rd_out_1;
+temp_2 = {{20{immediate[11]}} , immediate};
+temp_1 = result;
+end
+
+
+else if(is_ori)
+begin
+ALU_control = 6'b001111;
+temp_0 = rd_out_1;
+temp_2 = {{20{immediate[11]}} , immediate};
+temp_1 = result;
+end
+
+
+
+else if(is_slli)
+begin
+ALU_control = 6'b010000;
+temp_0 = rd_out_1;
+temp_2 = {{27'b0} , immediate[4:0]};
+temp_1 = result;
+end
+
+
+else if (is_srli)
+begin
+ALU_control = 6'b010001;
+temp_0 = rd_out_1;
+temp_2 = {{27'b0} , immediate[4:0]};
+temp_1 = result;
+end
+
+
+else if(is_srai)
+begin
+ALU_control = 6'b010010;
+temp_0 = rd_out_1;
+temp_2 = {{27'b0} , immediate[4:0]};
+temp_1 = result;
+end
+
+
+else if(is_lbu)
+begin
+ALU_control = 6'b000001;
+temp_0 = rd_out_1;
+temp_2 = {{20{immediate[11]}} , immediate};   
+complete_address  = result;   // temp_2 acts as offset
+temp_1 = {{24'b0},byte_0};
+end
+
+
+
+else if(is_lb)
+begin
+ALU_control = 6'b000001;
+temp_0 = rd_out_1;
+temp_2 = {{20{immediate[11]}} , immediate};
+complete_address = result;
+temp_1 ={{24{byte_0[7]}},byte_0};
+end
+
+
+
+else if(is_lh)
+begin
+ALU_control = 6'b000001;
+temp_0 = rd_out_1;
+temp_2 = {{20{immediate[11]}} , immediate}; 
+complete_address = result;
+temp_1 ={{16{byte_1[7]}} ,byte_1,byte_0};
+end
+
+
+
+
+
+else if(is_lw)
+begin
+ALU_control = 6'b000001;
+temp_0 = rd_out_1;
+temp_2 = {{20{immediate[11]}} , immediate};
+complete_address = result;
+temp_1 = data_out;
+end
+
+
+
+
+
+else if(is_lhu)
+begin
+ALU_control = 6'b000001;
+temp_0 = rd_out_1;
+temp_2 = {{20{immediate[11]}} , immediate};
+complete_address = result;
+temp_1= {{16{1'b0}} , byte_1 , byte_0};
+end
+
+
+if (is_sb)
+begin
+ALU_control = 6'b000001;
+temp_2 = {{20{instruction[31]}} , offset_immediate};
+temp_0 = rd_out_1;
+complete_address = result;
+temp_1 = {{24'b0} , rd_out_2[7:0]};
+end
+
+
+else if(is_sh)
+begin
+ALU_control = 6'b000001;
+temp_0 = rd_out_1;
+temp_2 = {{20{instruction[31]}} , offset_immediate};
+complete_address = result;
+temp_1 = {{16'b0} , rd_out_2[15:0]};
+end
+
+
+else if (is_sw)
+begin
+ALU_control = 6'b000001;
+temp_0 = rd_out_1;
+temp_2 = {{20{instruction[31]}} , offset_immediate};
+complete_address = result;
+temp_1 = rd_out_2[31:0];
+end
+
+
+else if(is_beq)
+begin
+ALU_control = 6'b000001; 
+temp_0 = PC_curr;
+if (rd_out_1 == rd_out_2)
+begin
+temp_2 = {{20{raw_immediate[11]}}, raw_immediate}<<1;
+PC_final = result;
+end
+end
+
+
+else if(is_bne)
+begin
+ALU_control = 6'b000001; 
+temp_0 = PC_curr;
+if(rd_out_1 != rd_out_2)
+begin
+temp_2 = {{20{raw_immediate[11]}}, raw_immediate}<<1;
+PC_final = result;
+end
+end
+
+
+else if(is_blt)
+begin
+ALU_control = 6'b000001; 
+temp_0 = PC_curr;
+if ($signed(rd_out_1) < $signed(rd_out_2))
+begin
+temp_2 = {{20{raw_immediate[11]}}, raw_immediate}<<1;
+PC_final = result;
+end
+end
+
+else if(is_bge)
+begin
+ALU_control = 6'b000001; 
+temp_0 = PC_curr;
+if ($signed(rd_out_1) >= $signed(rd_out_2))
+begin
+temp_2 = {{20{raw_immediate[11]}} , raw_immediate}<<1;
+PC_final = result;
+end
+end
+
+else if(is_bltu)
+begin
+ALU_control = 6'b000001; 
+temp_0 = PC_curr;
+if (rd_out_1 < rd_out_2)
+begin
+temp_2 = {{20{raw_immediate[11]}}, raw_immediate}<<1;
+PC_final = result ;
+end
+end
+
+
+else if(is_bgeu)
+begin
+ALU_control = 6'b000001; 
+temp_0 = PC_curr;
+if (rd_out_1 >= rd_out_2)
+begin
+temp_2 = {{20{raw_immediate[11]}} , raw_immediate}<<1;
+PC_final = result;
+end
+end
+
+
+else if (is_jal)
+begin
+ALU_control = 6'b000001;
+temp_0 = PC_curr;
+temp_2 = {{12{immediate_jump[19]}}  , immediate_jump}<<1;
+PC_final = result;
+temp_1 = PC_curr + 4;
+end
+
+
+else if(is_jalr)
+begin
+ALU_control = 6'b000001;
+temp_0 = rd_out_1;
+temp_2 = {{20{immediate[11]}} , immediate};
+PC_final = {result[31:1] , 1'b0};
+end
+
+
+else if(is_lui)
+begin
+ALU_control = 6'b000001;
+temp_1 = raw_immediate_load_upper << 12;
+end
+
+
+else if(is_auipc)
+begin
+ALU_control = 6'b000001;
+temp_0 = PC_curr;
+temp_2 = raw_immediate_load_upper << 12;
+temp_1 = result;
+end
+end
+
+
+
+
+
+
+
+
+
+
+assign neg_B =  is_lbu || is_lb || is_lh || is_lw || is_lhu || is_sb || is_sh || is_sw || is_beq || is_bne || is_blt || is_bge || is_bltu || is_bgeu || is_jal || is_jalr||is_auipc;
+
+
+
+
+assign  wr_enable_register = (destination_register != 5'b0) && (is_add || is_sub || is_and || is_or || is_xor || is_sll || is_slt || is_sltu || is_srl || is_sra || is_addi || is_andi || is_ori || is_xori || is_slli || is_srli || is_srai || is_slti || is_sltiu ||
+is_lb || is_lh || is_lw || is_lbu || is_lhu||is_lui||is_auipc||is_jal) ;
+
+
+assign wr_enable_data = (is_sb || is_sh || is_sw );
+
+
+assign misalligned_access = (((is_lw || is_sw) && (complete_address[1:0] != 2'b00)) || ((is_lh || is_lhu || is_sh) && (complete_address[0] != 1'b0)));
+
+
+
+
+assign processed_data = temp_1;
+assign PC_done = PC_final;
+assign overall_address = complete_address;
+
+endmodule
+  
+  
+
+  
+  
+module topmost(access_bound , misalligned_access , clk , reset);
+input clk;
+input reset;
+
+output access_bound;
+output misalligned_access;
+
+
+wire neg_B;
+wire [31:0]result;
+wire [5:0]ALU_control;
+wire [31:0]input_1;
+wire [31:0]input_2;
+wire is_add;
+wire is_sub;
+wire is_and;
+wire is_or;
+wire is_xor;
+wire is_sll;
+wire is_slt;
+wire is_sltu;
+wire is_srl;
+wire is_sra;
+wire is_addi;
+wire is_andi;
+wire is_ori;
+wire is_xori;
+wire is_slli;
+wire is_srli;
+wire is_srai;
+wire is_slti;
+wire is_sltiu;
+wire is_lb;
+wire is_lh;
+wire is_lw;
+wire is_lbu;
+wire is_lhu;
+wire is_sb;
+wire is_sh;
+wire is_sw;
+wire is_beq;
+wire is_bne;
+wire is_blt;
+wire is_bge;
+wire is_bltu;
+wire is_bgeu;
+ wire is_jal;
+ wire is_jalr;
+ wire is_lui;
+ wire is_auipc;
+ wire [31:0]rd_out_2;
+ wire [31:0]rd_out_1;
+ wire [4:0]register_2;
+ wire [4:0]register_1;
+ wire [4:0]destination_register;
+ wire [31:0]processed_data;
+ wire wr_en_register;
+ wire [31:0]data_out;
+ wire [31:0]overall_address;
+ wire wr_en_data;
+ wire [31:0]instruction_out;
+ wire [31:0]PC_done;
+ wire [31:0]PC_curr;
+ wire [10:0]physical_address;
+
+
+
+
+
+
+
+
+
+ALU first (result , ALU_control , input_1, input_2 , neg_B );
+
+control_unit second(is_add, is_sub, is_and, is_or, is_xor, is_sll, is_slt, is_sltu, is_srl, is_sra,
+is_addi, is_andi, is_ori, is_xori, is_slli, is_srli, is_srai, is_slti, is_sltiu,
+is_lb, is_lh, is_lw, is_lbu, is_lhu,
+is_sb, is_sh, is_sw,is_beq, is_bne, is_blt, is_bge, is_bltu, is_bgeu, is_jal, is_jalr ,is_lui , is_auipc ,reset ,instruction_out);
+
+register_set third(rd_out_1 , rd_out_2 , clk , reset , register_1 , register_2 , destination_register ,processed_data, wr_en_register);
+
+memory_management_unit forth(access_bound , physical_address , overall_address , is_sw , is_sh , is_sb , is_lbu , is_lb , is_lh , is_lhu , is_lw);
+
+data_memory fifth(data_out  , physical_address ,clk , reset ,wr_en_data , processed_data , access_bound);
+ 
+Instruction_memory sixth(instruction_out , PC_curr);
+ 
+PC seventh(PC_curr, clk , reset ,PC_done);
+
+main_control eigthth(neg_B , input_1 , input_2 ,processed_data , PC_done  ,overall_address ,wr_en_data , wr_en_register , misalligned_access ,ALU_control ,register_1 , register_2 ,destination_register  , is_add, is_sub, is_and, is_or, is_xor, is_sll, is_slt, is_sltu, is_srl, is_sra,
+is_addi, is_andi, is_ori, is_xori, is_slli, is_srli, is_srai, is_slti, is_sltiu,
+is_lb, is_lh, is_lw, is_lbu, is_lhu,
+is_sb, is_sh, is_sw,
+is_beq, is_bne, is_blt, is_bge, is_bltu, is_bgeu, is_jal, is_jalr,is_lui , is_auipc ,instruction_out, PC_curr , result , rd_out_2 , rd_out_1 , data_out);
+
+endmodule
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+   
+
+
+
+
+
+
+
+
