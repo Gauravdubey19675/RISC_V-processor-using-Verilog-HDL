@@ -1,0 +1,20 @@
+
+module memory_management_unit(valid_access , physical_address , data_address , is_sw , is_sh , is_sb , is_lbu , is_lb , is_lh , is_lhu , is_lw);
+input is_sw;
+input is_sh;
+input is_sb;
+input is_lbu;
+input is_lb;
+input is_lhu;
+input is_lh;
+input is_lw;
+input [31:0]data_address;
+output [9:0]physical_address;
+output valid_access;
+
+
+assign physical_address = data_address[9:0];
+
+assign valid_access = (physical_address<1021 && is_sw) || (physical_address<1023 && is_sh) || (physical_address < 1023 && is_sb) || (physical_address < 1021 && (is_lb || is_lbu || is_lh || is_lhu || is_lw));
+
+endmodule
