@@ -1,0 +1,41 @@
+module data_memory(data_out  , physical_address , clk , reset ,  wr_en_data , data_in , valid_access);
+
+input wr_en_data ;
+input [31:0]data_in;
+input clk;
+input reset;
+input [9:0]physical_address;
+input valid_access;
+output[31:0]data_out;
+
+reg [7:0]memo[0:1023];
+
+reg [10:0]i;
+
+
+always @(negedge clk or posedge reset)
+begin
+if(reset)
+begin
+for(i=0 ; i<1024 ; i=i+1)
+memo[i]<=8'b0;
+end
+else
+begin
+if (wr_en_data)
+begin
+if(valid_access)
+begin
+memo[physical_address]<= data_in[7:0];
+memo[physical_address+1]<=data_in[15:8];
+memo[physical_address+2]<=data_in[23:16];
+memo[physical_address+3]<=data_in[31:24];
+end
+end
+end
+end
+
+assign data_out = valid_access ?{memo[physical_address + 3] , memo[physical_address+ 2] , memo[physical_address + 1] , memo[physical_address]}:32'b0;
+
+endmodule
+
