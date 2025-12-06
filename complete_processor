@@ -983,7 +983,7 @@ wire is_bgeu;
  wire [31:0]instruction_out;
  wire [31:0]PC_done;
  wire [31:0]PC_curr;
- wire [10:0]physical_address;
+ wire [9:0]physical_address;
 
 
 
