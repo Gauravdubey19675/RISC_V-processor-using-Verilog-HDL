@@ -1,0 +1,143 @@
+module topmost(access_bound , misalligned_access , clk , reset);
+input clk;
+input reset;
+
+output access_bound;
+output misalligned_access;
+
+
+wire neg_B;
+wire [31:0]result;
+wire [5:0]ALU_control;
+wire [31:0]input_1;
+wire [31:0]input_2;
+wire is_add;
+wire is_sub;
+wire is_and;
+wire is_or;
+wire is_xor;
+wire is_sll;
+wire is_slt;
+wire is_sltu;
+wire is_srl;
+wire is_sra;
+wire is_addi;
+wire is_andi;
+wire is_ori;
+wire is_xori;
+wire is_slli;
+wire is_srli;
+wire is_srai;
+wire is_slti;
+wire is_sltiu;
+wire is_lb;
+wire is_lh;
+wire is_lw;
+wire is_lbu;
+wire is_lhu;
+wire is_sb;
+wire is_sh;
+wire is_sw;
+wire is_beq;
+wire is_bne;
+wire is_blt;
+wire is_bge;
+wire is_bltu;
+wire is_bgeu;
+ wire is_jal;
+ wire is_jalr;
+ wire is_lui;
+ wire is_auipc;
+ wire [31:0]rd_out_2;
+ wire [31:0]rd_out_1;
+ wire [4:0]register_2;
+ wire [4:0]register_1;
+ wire [4:0]destination_register;
+ wire [31:0]processed_data;
+ wire wr_en_register;
+ wire [31:0]data_out;
+ wire [31:0]overall_address;
+ wire wr_en_data;
+ wire [31:0]instruction_out;
+ wire [31:0]PC_done;
+ wire [31:0]PC_curr;
+ wire [10:0]physical_address;
+
+
+
+
+
+
+
+
+
+ALU first (result , ALU_control , input_1, input_2 , neg_B );
+
+control_unit second(is_add, is_sub, is_and, is_or, is_xor, is_sll, is_slt, is_sltu, is_srl, is_sra,
+is_addi, is_andi, is_ori, is_xori, is_slli, is_srli, is_srai, is_slti, is_sltiu,
+is_lb, is_lh, is_lw, is_lbu, is_lhu,
+is_sb, is_sh, is_sw,is_beq, is_bne, is_blt, is_bge, is_bltu, is_bgeu, is_jal, is_jalr ,is_lui , is_auipc ,reset ,instruction_out);
+
+register_set third(rd_out_1 , rd_out_2 , clk , reset , register_1 , register_2 , destination_register ,processed_data, wr_en_register);
+
+memory_management_unit forth(access_bound , physical_address , overall_address , is_sw , is_sh , is_sb , is_lbu , is_lb , is_lh , is_lhu , is_lw);
+
+data_memory fifth(data_out  , physical_address ,clk , reset ,wr_en_data , processed_data , access_bound);
+ 
+Instruction_memory sixth(instruction_out , PC_curr);
+ 
+PC seventh(PC_curr, clk , reset ,PC_done);
+
+main_control eigthth(neg_B , input_1 , input_2 ,processed_data , PC_done  ,overall_address ,wr_en_data , wr_en_register , misalligned_access ,ALU_control ,register_1 , register_2 ,destination_register  , is_add, is_sub, is_and, is_or, is_xor, is_sll, is_slt, is_sltu, is_srl, is_sra,
+is_addi, is_andi, is_ori, is_xori, is_slli, is_srli, is_srai, is_slti, is_sltiu,
+is_lb, is_lh, is_lw, is_lbu, is_lhu,
+is_sb, is_sh, is_sw,
+is_beq, is_bne, is_blt, is_bge, is_bltu, is_bgeu, is_jal, is_jalr,is_lui , is_auipc ,instruction_out, PC_curr , result , rd_out_2 , rd_out_1 , data_out);
+
+endmodule
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+   
+
+
+
+
+
+
